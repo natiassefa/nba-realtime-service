@@ -160,8 +160,6 @@ curl http://localhost:8000/games/{uuid}/summary
 
 ```
 
-```
-
 
 Returns current game statistics, scores, and status.
 
@@ -180,8 +178,6 @@ Example:
 curl http://localhost:8000/games/{uuid}/pbp
 ```
 
-```
-
 Returns detailed play-by-play events for the game.
 
 
@@ -196,16 +192,12 @@ curl http://localhost:8000/health
 
 ```
 
-```
-
 
 **Detailed Health:**
 
 ```bash
 GET /health/detailed
 curl http://localhost:8000/health/detailed
-```
-
 ```
 
 Verifies Redis connection and `nba_api` library availability.
@@ -227,14 +219,17 @@ KAFKA_BROKERS=redpanda:9092
 
 # PostgreSQL
 DB_HOST=postgres
-DB_PORT=5432
+DB_PORT=5432 # Internal Docker port (exposed as 5433 on host)
+
 DB_USER=nba
 DB_PASSWORD=nba
 DB_NAME=nba
+
 # Polling Configuration (optional)
 
 POLLING_BASE_INTERVAL_MS=5000 # Base polling interval in milliseconds
 POLLING_SCHEDULE_DATE=2025-11-13 # Override date (defaults to today in ET)
+
 
 ```
 
@@ -293,7 +288,7 @@ The test script will:
 ```bash
 # Run TypeScript unit tests
 pnpm test
-```
+
 
 
 # Run with coverage
@@ -303,8 +298,6 @@ pnpm run test:coverage
 # Watch mode
 
 pnpm run test:watch
-
-```
 
 ```
 
@@ -518,11 +511,19 @@ docker compose ps postgres
 
 # Verify connection
 docker compose exec postgres psql -U nba -d nba -c "SELECT 1"
+
 # Check migrations
 
 docker compose exec nba-realtime-service pnpm run migrate
+```
 
-````
+```
+
+```
+
+```
+
+
 
 ### Redis connection issues
 
@@ -532,7 +533,10 @@ docker compose ps redis
 
 # Test Redis connection
 docker compose exec redis redis-cli ping
-````
+```
+
+```
+
 
 ### Kafka/Redpanda issues
 
@@ -545,8 +549,6 @@ docker compose logs redpanda
 
 # Access Redpanda Console
 # Open http://localhost:8080 in browser
-```
-
 ```
 
 ## Notes
