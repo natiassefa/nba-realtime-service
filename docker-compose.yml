@@ -1,0 +1,102 @@
+# Docker Compose Configuration
+# 
+# Defines local development infrastructure:
+# - Redis: In-memory cache for ETags, TTLs, and game state
+# - Redpanda: Kafka-compatible message broker (lighter alternative to Kafka)
+# - Console: Web UI for viewing Kafka topics and messages
+
+version: "3.9"
+services:
+  # Redis cache for storing game state, ETags, and TTL values
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379" # Default Redis port
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # Redpanda - Kafka-compatible message broker
+  # Used for publishing game update messages
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.2
+    command:
+      - redpanda start
+      - --overprovisioned  # Optimize for development (less strict resource checks)
+      - --smp=1            # Single CPU core
+      - --memory=1G        # 1GB memory limit
+      - --reserve-memory=0M # No reserved memory
+      - --node-id=0        # Single node ID
+      - --check=false      # Skip system checks
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "9092:9092"   # Kafka API port (used by KafkaJS client - internal)
+      - "19092:19092" # External Kafka API port (for host access)
+      - "9644:9644"   # Admin API port
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9644/v1/status/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s  # Give Redpanda time to start
+
+  # Redpanda Console - Web UI for viewing Kafka topics and messages
+  # Access at http://localhost:8080
+  console:
+    image: docker.redpanda.com/redpandadata/console:v2.6.0
+    environment:
+      - KAFKA_BROKERS=redpanda:9092  # Connect to Redpanda broker
+    ports:
+      - "8080:8080"  # Web UI port
+    depends_on:
+      - redpanda  # Start after Redpanda is ready
+
+  # PostgreSQL database for persistent storage
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nba}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nba}
+      POSTGRES_DB: ${POSTGRES_DB:-nba}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nba}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NBA Realtime Service - TypeScript + Python bridge
+  nba-realtime-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"  # Python bridge service
+    environment:
+      - NBA_API_BRIDGE_URL=http://localhost:8000
+      - REDIS_URL=redis://redis:6379
+      - KAFKA_BROKERS=redpanda:9092
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER:-nba}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-nba}
+      - DB_NAME=${POSTGRES_DB:-nba}
+    depends_on:
+      redis:
+        condition: service_healthy  # Wait for Redis health check to pass
+      redpanda:
+        condition: service_healthy  # Wait for Redpanda health check to pass
+      postgres:
+        condition: service_healthy  # Wait for PostgreSQL health check to pass
+    networks:
+      - default
+
+volumes:
+  postgres_data:
